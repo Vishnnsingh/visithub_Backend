@@ -1,47 +1,16 @@
-import fs from 'fs';
 import path from 'path';
 import { getSupabaseAdmin } from '../config/supabase';
 import logger from '../config/logger';
-import env from '../config/env';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-
-/** In-memory mirror of every store (basename → data). Source of truth at runtime. */
+/** In-memory mirror of every store (basename → data). Source of truth at runtime = Supabase. */
 const memory = new Map<string, unknown>();
 
 let hydrated = false;
 let hydratePromise: Promise<void> | null = null;
 const pendingWrites = new Map<string, NodeJS.Timeout>();
 
-/** Local JSON files only as one-time migrate source — never write in normal operation. */
-function allowLocalJsonFiles() {
-  return process.env.PERSIST_JSON_FILES === 'true' || !env.SUPABASE_URL;
-}
-
 function keyFromPath(filePath: string): string {
   return path.basename(filePath);
-}
-
-function ensureDir(filePath: string) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function writeLocal(filePath: string, data: unknown) {
-  if (!allowLocalJsonFiles()) return;
-  ensureDir(filePath);
-  const temp = `${filePath}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(temp, filePath);
-}
-
-function readLocal<T>(filePath: string): T | null {
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
-  } catch {
-    return null;
-  }
 }
 
 async function upsertRemote(key: string, value: unknown) {
@@ -55,7 +24,6 @@ async function upsertRemote(key: string, value: unknown) {
     logger.warn(`Supabase app_kv upsert failed (${key}): ${error.message}`);
     return;
   }
-  // Also mirror small settings / specialty stores into vh_settings when applicable
   const settingsKeys = new Set([
     'landing-theme.json',
     'contact-info.json',
@@ -107,7 +75,7 @@ export async function hydrateJsonStores(): Promise<void> {
   hydratePromise = (async () => {
     const admin = getSupabaseAdmin();
     if (!admin) {
-      logger.warn('Store hydrate skipped — Supabase not available (will use memory only)');
+      logger.warn('Store hydrate skipped — Supabase not available (memory only)');
       hydrated = true;
       return;
     }
@@ -118,13 +86,6 @@ export async function hydrateJsonStores(): Promise<void> {
         logger.warn(
           `Supabase app_kv read failed: ${error.message}. Run sql/009_app_kv.sql and sql/011_visit_hub_tables.sql`
         );
-        // One-time: seed memory from local JSON if present (migrate source), do not keep writing files
-        if (fs.existsSync(DATA_DIR)) {
-          for (const file of fs.readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'))) {
-            const parsed = readLocal<unknown>(path.join(DATA_DIR, file));
-            if (parsed != null) memory.set(file, parsed);
-          }
-        }
         hydrated = true;
         return;
       }
@@ -134,18 +95,7 @@ export async function hydrateJsonStores(): Promise<void> {
         for (const row of rows) {
           memory.set(String(row.key), row.value);
         }
-        logger.info(`Supabase stores hydrated (${rows.length} rows) — no local JSON writes`);
-      } else if (fs.existsSync(DATA_DIR)) {
-        const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith('.json'));
-        let uploaded = 0;
-        for (const file of files) {
-          const parsed = readLocal<unknown>(path.join(DATA_DIR, file));
-          if (parsed == null) continue;
-          memory.set(file, parsed);
-          await upsertRemote(file, parsed);
-          uploaded += 1;
-        }
-        logger.info(`Bootstrapped ${uploaded} stores from local migrate source → Supabase`);
+        logger.info(`Supabase stores hydrated (${rows.length} rows) — local JSON disabled`);
       } else {
         logger.info('Supabase stores empty — waiting for first writes');
       }
@@ -165,23 +115,15 @@ export function isJsonStoresHydrated() {
 export function loadJsonStore<T>(filePath: string, fallback: T): T {
   const key = keyFromPath(filePath);
   if (memory.has(key)) return memory.get(key) as T;
-  // Read-only fallback from old local file (migrate), never required going forward
-  const local = readLocal<T>(filePath);
-  if (local != null) {
-    memory.set(key, local);
-    scheduleRemoteWrite(key, local);
-    return local;
-  }
   memory.set(key, fallback);
   scheduleRemoteWrite(key, fallback);
   return fallback;
 }
 
+/** Save to memory + Supabase only — never writes local JSON files. */
 export function saveJsonStore(filePath: string, data: unknown): void {
   const key = keyFromPath(filePath);
   memory.set(key, data);
-  // Do not write JSON files when Supabase is configured
-  writeLocal(filePath, data);
   scheduleRemoteWrite(key, data);
 }
 
