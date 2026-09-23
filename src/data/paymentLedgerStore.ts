@@ -1,8 +1,8 @@
-import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { findOrganizationById, findUserById } from './appStore';
 import type { OrgSubscription } from './subscriptionStore';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type PaymentGateway = 'dummy' | 'razorpay' | 'stripe' | 'payu' | 'other';
 
@@ -60,16 +60,13 @@ function defaultSettings(): GatewaySettings {
   };
 }
 
+function emptyStore(): StoreFile {
+  return { payments: [], settings: defaultSettings() };
+}
+
 function ensureStore(): StoreFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial: StoreFile = { payments: [], settings: defaultSettings() };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as StoreFile;
+    const raw = loadJsonStore<StoreFile>(STORE_PATH, emptyStore());
     return {
       payments: Array.isArray(raw.payments) ? raw.payments : [],
       settings: {
@@ -82,16 +79,14 @@ function ensureStore(): StoreFile {
       },
     };
   } catch {
-    const fallback: StoreFile = { payments: [], settings: defaultSettings() };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(fallback, null, 2), 'utf8');
+    const fallback = emptyStore();
+    saveJsonStore(STORE_PATH, fallback);
     return fallback;
   }
 }
 
 function writeStore(store: StoreFile) {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, store);
 }
 
 export function getPaymentGatewaySettings(): GatewaySettings {

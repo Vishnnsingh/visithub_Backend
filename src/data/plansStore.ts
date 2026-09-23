@@ -1,6 +1,6 @@
-import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type SubscriptionPlan = {
   id: string;
@@ -109,31 +109,28 @@ function defaultPlans(): SubscriptionPlan[] {
   ];
 }
 
+function emptyStore(): PlansFile {
+  return { plans: defaultPlans() };
+}
+
 function ensureFile(): PlansFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial = { plans: defaultPlans() };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as PlansFile;
+    const raw = loadJsonStore<PlansFile>(STORE_PATH, emptyStore());
     if (!Array.isArray(raw.plans) || !raw.plans.length) {
-      const initial = { plans: defaultPlans() };
-      fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
+      const initial = emptyStore();
+      saveJsonStore(STORE_PATH, initial);
       return initial;
     }
     return raw;
   } catch {
-    const initial = { plans: defaultPlans() };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
+    const initial = emptyStore();
+    saveJsonStore(STORE_PATH, initial);
     return initial;
   }
 }
 
 function writeFile(data: PlansFile) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, data);
 }
 
 export function listSubscriptionPlans(activeOnly = false) {

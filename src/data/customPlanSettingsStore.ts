@@ -1,9 +1,9 @@
-import fs from 'fs';
 import path from 'path';
 
 import { getOrgCustomMonthlyPrice } from './orgCustomPlanSettingsStore';
 import { getBusinessTypeMonthlyPrice } from './businessTypePlanSettingsStore';
 import { findOrganizationById } from './appStore';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type CustomPlanSettings = {
   /** Price charged per month for custom duration purchases */
@@ -51,19 +51,12 @@ function clampSettings(raw: Partial<CustomPlanSettings>): CustomPlanSettings {
 }
 
 function ensureStore(): CustomPlanSettings {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial = defaults();
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as Partial<CustomPlanSettings>;
+    const raw = loadJsonStore<Partial<CustomPlanSettings>>(STORE_PATH, defaults());
     return clampSettings(raw);
   } catch {
     const fallback = defaults();
-    fs.writeFileSync(STORE_PATH, JSON.stringify(fallback, null, 2), 'utf8');
+    saveJsonStore(STORE_PATH, fallback);
     return fallback;
   }
 }
@@ -110,9 +103,7 @@ export function setCustomPlanSettings(input: {
   defaultMonths: number;
 }): CustomPlanSettings {
   const next = clampSettings({ ...input, updatedAt: now() });
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(next, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, next);
   return next;
 }
 

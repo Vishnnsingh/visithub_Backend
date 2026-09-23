@@ -1,9 +1,9 @@
-import fs from 'fs';
 import path from 'path';
 import {
   clearBusinessTypePlanPricing,
   renameBusinessTypePlanPricingKey,
 } from './businessTypePlanSettingsStore';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 /** Seed list used when the store file is first created */
 export const DEFAULT_BUSINESS_TYPES = [
@@ -54,28 +54,23 @@ function withOtherLast(types: string[]): string[] {
 }
 
 function writeFile(data: StoreFile) {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const payload: StoreFile = {
     types: withOtherLast(data.types),
     updatedAt: data.updatedAt,
   };
-  fs.writeFileSync(STORE_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, payload);
+}
+
+function emptyStore(): StoreFile {
+  return {
+    types: [...DEFAULT_BUSINESS_TYPES],
+    updatedAt: now(),
+  };
 }
 
 function ensureFile(): StoreFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial: StoreFile = {
-      types: [...DEFAULT_BUSINESS_TYPES],
-      updatedAt: now(),
-    };
-    writeFile(initial);
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as StoreFile;
+    const raw = loadJsonStore<StoreFile>(STORE_PATH, emptyStore());
     const types = Array.isArray(raw?.types)
       ? raw.types
           .map((t) => normalizeName(String(t)))
@@ -84,10 +79,7 @@ function ensureFile(): StoreFile {
       : [...DEFAULT_BUSINESS_TYPES];
     return { types, updatedAt: String(raw?.updatedAt || now()) };
   } catch {
-    const fallback: StoreFile = {
-      types: [...DEFAULT_BUSINESS_TYPES],
-      updatedAt: now(),
-    };
+    const fallback = emptyStore();
     writeFile(fallback);
     return fallback;
   }

@@ -1,5 +1,4 @@
 import { randomBytes } from 'crypto';
-import fs from 'fs';
 import path from 'path';
 import type {
   StaffSummary,
@@ -15,6 +14,7 @@ import type {
   StoredPushSubscription,
   HomeLayout,
 } from '../types/auth';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type AppData = {
   users: StoredUser[];
@@ -77,11 +77,7 @@ function emptyData(): AppData {
 }
 
 function ensureStore(): void {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(emptyData(), null, 2));
-  }
+  loadJsonStore(STORE_PATH, emptyData());
 }
 
 export function normName(value: string): string {
@@ -361,8 +357,7 @@ export function bumpSummary(
 export function readStore(): AppData {
   ensureStore();
   try {
-    const raw = fs.readFileSync(STORE_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<AppData>;
+    const parsed = loadJsonStore<Partial<AppData>>(STORE_PATH, emptyData());
     const data: AppData = {
       users: Array.isArray(parsed.users) ? parsed.users : [],
       organizations: Array.isArray(parsed.organizations) ? parsed.organizations : [],
@@ -402,9 +397,7 @@ export function readStore(): AppData {
 
 export function writeStore(data: AppData): void {
   ensureStore();
-  const tempPath = `${STORE_PATH}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
-  fs.renameSync(tempPath, STORE_PATH);
+  saveJsonStore(STORE_PATH, data);
 }
 
 export function mutateStore<T>(fn: (data: AppData) => T): T {

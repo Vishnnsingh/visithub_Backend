@@ -1,5 +1,5 @@
-import fs from 'fs';
 import path from 'path';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export const LEGAL_SLUGS = ['terms', 'privacy'] as const;
 export type LegalSlug = (typeof LEGAL_SLUGS)[number];
@@ -41,15 +41,8 @@ function defaults(): StoreFile {
 }
 
 function ensureStore(): StoreFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial = defaults();
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as StoreFile;
+    const raw = loadJsonStore<StoreFile>(STORE_PATH, defaults());
     const base = defaults();
     for (const slug of LEGAL_SLUGS) {
       const page = raw?.pages?.[slug];
@@ -65,15 +58,13 @@ function ensureStore(): StoreFile {
     return base;
   } catch {
     const fallback = defaults();
-    fs.writeFileSync(STORE_PATH, JSON.stringify(fallback, null, 2), 'utf8');
+    saveJsonStore(STORE_PATH, fallback);
     return fallback;
   }
 }
 
 function writeStore(store: StoreFile) {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, store);
 }
 
 export function isLegalSlug(value: string): value is LegalSlug {

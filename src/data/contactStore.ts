@@ -1,6 +1,6 @@
-import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type ContactMessage = {
   id: string;
@@ -21,29 +21,24 @@ function now() {
   return new Date().toISOString();
 }
 
+function emptyStore(): StoreFile {
+  return { messages: [] };
+}
+
 function ensureStore(): StoreFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial: StoreFile = { messages: [] };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as StoreFile;
+    const raw = loadJsonStore<StoreFile>(STORE_PATH, emptyStore());
     if (Array.isArray(raw.messages)) return raw;
   } catch {
     /* fall through */
   }
-  const fallback: StoreFile = { messages: [] };
-  fs.writeFileSync(STORE_PATH, JSON.stringify(fallback, null, 2), 'utf8');
+  const fallback = emptyStore();
+  saveJsonStore(STORE_PATH, fallback);
   return fallback;
 }
 
 function writeStore(store: StoreFile) {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, store);
 }
 
 export function addContactMessage(input: {

@@ -1,5 +1,5 @@
-import fs from 'fs';
 import path from 'path';
+import { loadJsonStore, saveJsonStore } from './jsonPersist';
 
 export type OrgPlanPricing = {
   /** Custom-tab monthly rate (overrides global custom monthly) */
@@ -47,19 +47,16 @@ function normalizeEntry(raw: unknown): OrgPlanPricing {
   };
 }
 
+function emptyStore(): StoreFile {
+  return { byOrg: {} };
+}
+
 function ensureFile(): StoreFile {
-  const dir = path.dirname(STORE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) {
-    const initial: StoreFile = { byOrg: {} };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
-    return initial;
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) as StoreFile;
+    const raw = loadJsonStore<StoreFile>(STORE_PATH, emptyStore());
     if (!raw || typeof raw !== 'object' || !raw.byOrg || typeof raw.byOrg !== 'object') {
-      const initial: StoreFile = { byOrg: {} };
-      fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
+      const initial = emptyStore();
+      saveJsonStore(STORE_PATH, initial);
       return initial;
     }
     const byOrg: Record<string, OrgPlanPricing> = {};
@@ -68,14 +65,14 @@ function ensureFile(): StoreFile {
     }
     return { byOrg };
   } catch {
-    const initial: StoreFile = { byOrg: {} };
-    fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf8');
+    const initial = emptyStore();
+    saveJsonStore(STORE_PATH, initial);
     return initial;
   }
 }
 
 function writeFile(data: StoreFile) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  saveJsonStore(STORE_PATH, data);
 }
 
 function isEmpty(entry: OrgPlanPricing) {
