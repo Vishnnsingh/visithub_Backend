@@ -10,7 +10,14 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: env.corsOrigins,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.trim().replace(/\/+$/, '');
+      callback(null, env.corsOrigins.includes(normalized));
+    },
     credentials: true,
   },
 });

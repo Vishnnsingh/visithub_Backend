@@ -21,7 +21,19 @@ app.use(
 );
 app.use(
   cors({
-    origin: env.corsOrigins,
+    origin(origin, callback) {
+      // Same-origin / server-to-server (no Origin header)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.trim().replace(/\/+$/, '');
+      if (env.corsOrigins.includes(normalized)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   })
 );

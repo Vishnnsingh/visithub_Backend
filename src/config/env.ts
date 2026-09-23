@@ -36,7 +36,7 @@ const env = {
   isDev: NODE_ENV === 'development',
   isProd: NODE_ENV === 'production',
   corsOrigins: CORS_ORIGIN.split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean),
 };
 
