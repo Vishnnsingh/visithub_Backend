@@ -11,10 +11,13 @@ export function initSupabase(): SupabaseClient | null {
     return null;
   }
 
-  supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+  // Client expects project root URL only (no /rest/v1)
+  const baseUrl = env.SUPABASE_URL.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
+
+  supabase = createClient(baseUrl, env.SUPABASE_ANON_KEY);
 
   if (env.SUPABASE_SERVICE_ROLE_KEY) {
-    supabaseAdmin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    supabaseAdmin = createClient(baseUrl, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
   }

@@ -16,10 +16,6 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
-const url = process.env.SUPABASE_URL || '';
-const anon = process.env.SUPABASE_ANON_KEY || '';
-const service = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
 function decodeRole(jwt) {
   try {
     return JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8')).role || '';
@@ -29,10 +25,15 @@ function decodeRole(jwt) {
 }
 
 async function main() {
+  const url = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
+  const anon = process.env.SUPABASE_ANON_KEY || '';
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
   if (!url || !service) {
     console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
     process.exit(1);
   }
+  console.log('SUPABASE_URL:', url);
 
   const role = decodeRole(service);
   console.log('SERVICE_ROLE_KEY role:', role || '(unknown)');
