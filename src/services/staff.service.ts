@@ -19,9 +19,11 @@ import {
   removeStaffUser,
   uniqueStaffCode,
   updateStaffUser,
+  upsertUser,
 } from '../data/appStore';
 import type { StoredStaffRole, StoredUser } from '../types/auth';
 import { normalizeStaffPages } from '../utils/dashboardAccess';
+import { ensureSupabaseAuthUser } from './supabaseAuth';
 
 const PAGE_SIZE = 10;
 const RESERVED_ROLE = /^(admin|administrator|super[\s_-]?admin|org[\s_-]?admin|organisation[\s_-]?admin|organization[\s_-]?admin)$/i;
@@ -244,7 +246,20 @@ export function createStaffAccount(organizationId: string | null | undefined, in
     supabaseId: null,
   };
 
-  return toPublicStaff(addStaffUser(user), role);
+  const saved = addStaffUser(user);
+  void ensureSupabaseAuthUser({
+    email,
+    password: input.password,
+    fullName,
+    phone,
+    role: 'staff',
+    organizationId: orgId,
+    emailConfirm: true,
+  }).then((authId) => {
+    if (authId) upsertUser({ ...saved, supabaseId: authId, updatedAt: now() });
+  });
+
+  return toPublicStaff(saved, role);
 }
 
 export function updateStaffAccount(

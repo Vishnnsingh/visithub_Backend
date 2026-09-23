@@ -2,7 +2,11 @@ import { randomUUID } from 'crypto';
 import type { CookieOptions, Response } from 'express';
 import env from '../config/env';
 import logger from '../config/logger';
-import { getSupabase } from '../config/supabase';
+import {
+  ensureSupabaseAuthUser,
+  getSupabaseAuthEmailStatus,
+  sendSupabaseVerificationEmail,
+} from './supabaseAuth';
 import {
   addOrganization,
   deleteOrganization,
@@ -285,36 +289,29 @@ export async function registerAccount(input: RegisterInput) {
   // Mint visitor Home template (Welcome / Visit / Social / Thank you) — editable later in Home Element
   saveHomeLayout(organizationId, defaultHomeLayout(organization.name));
 
-  const supabase = getSupabase();
-  if (supabase) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: input.password,
-      options: {
-        data: {
-          full_name: input.fullName,
-          phone: input.mobileNumber,
-          role: USER_ROLES.ORG_ADMIN,
-          organization_id: organizationId,
-        },
-      },
-    });
-
-    if (error) {
-      logger.warn(`Supabase signup skipped: ${error.message}`);
-    } else if (data.user?.id) {
-      upsertUser({ ...user, supabaseId: data.user.id, updatedAt: now() });
-    }
+  // Supabase Auth: store email for verification (new accounts must confirm)
+  const authId = await ensureSupabaseAuthUser({
+    email,
+    password: input.password,
+    fullName: input.fullName,
+    phone: input.mobileNumber,
+    role: USER_ROLES.ORG_ADMIN,
+    organizationId,
+    emailConfirm: false,
+  });
+  if (authId) {
+    upsertUser({ ...user, supabaseId: authId, updatedAt: now() });
+    await sendSupabaseVerificationEmail(email, input.password);
   }
 
   return {
-    user: toPublicUser(user),
+    user: toPublicUser(findUserByEmail(email) || user),
     organization,
-    needsEmailConfirmation: false,
+    needsEmailConfirmation: Boolean(authId),
   };
 }
 
-export function loginAccount(email: string, password: string) {
+export async function loginAccount(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
   const user = findUserByEmail(normalized);
 
@@ -331,10 +328,30 @@ export function loginAccount(email: string, password: string) {
     throw new AppError('Invalid email or password', 401);
   }
 
-  const publicUser = toPublicUser(user);
+  const status = await getSupabaseAuthEmailStatus(normalized);
+  if (status.exists && !status.confirmed) {
+    throw new AppError('Please verify your email before logging in. Check your inbox.', 403);
+  }
+
+  // Migrated / older accounts: create Auth user as already verified so login never breaks
+  const authId = await ensureSupabaseAuthUser({
+    email: normalized,
+    password,
+    fullName: user.fullName,
+    phone: user.phone,
+    role: user.role,
+    organizationId: user.organizationId,
+    emailConfirm: !status.exists,
+  });
+  if (authId && authId !== user.supabaseId) {
+    upsertUser({ ...user, supabaseId: authId, updatedAt: now() });
+  }
+
+  const latest = findUserByEmail(normalized) || user;
+  const publicUser = toPublicUser(latest);
   const organization =
-    user.role === USER_ROLES.ORG_ADMIN && user.organizationId
-      ? findOrganizationById(user.organizationId) || null
+    latest.role === USER_ROLES.ORG_ADMIN && latest.organizationId
+      ? findOrganizationById(latest.organizationId) || null
       : null;
 
   return {
@@ -347,7 +364,7 @@ export function loginAccount(email: string, password: string) {
   };
 }
 
-export function loginSuperAdminAccount(email: string, password: string) {
+export async function loginSuperAdminAccount(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
   const user = findUserByEmail(normalized);
 
@@ -360,7 +377,21 @@ export function loginSuperAdminAccount(email: string, password: string) {
     throw new AppError('Invalid email or password', 401);
   }
 
-  const publicUser = toPublicUser(user);
+  const authId = await ensureSupabaseAuthUser({
+    email: normalized,
+    password,
+    fullName: user.fullName,
+    phone: user.phone,
+    role: user.role,
+    organizationId: null,
+    emailConfirm: true,
+  });
+  if (authId && authId !== user.supabaseId) {
+    upsertUser({ ...user, supabaseId: authId, updatedAt: now() });
+  }
+
+  const latest = findUserByEmail(normalized) || user;
+  const publicUser = toPublicUser(latest);
   return {
     user: publicUser,
     organization: null,

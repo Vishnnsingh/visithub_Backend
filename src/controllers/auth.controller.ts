@@ -34,14 +34,14 @@ export const register = asyncHandler(async (req, res) => {
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body as { email: string; password: string };
-  const data = loginAccount(email, password);
+  const data = await loginAccount(email, password);
   const token = attachOrgSession(res, data.user);
   return successResponse(res, 'Logged in successfully', { ...data, token });
 });
 
 export const superLogin = asyncHandler(async (req, res) => {
   const { email, password } = req.body as { email: string; password: string };
-  const data = loginSuperAdminAccount(email, password);
+  const data = await loginSuperAdminAccount(email, password);
   const token = attachSuperSession(res, data.user);
   return successResponse(res, 'Logged in successfully', { ...data, token });
 });

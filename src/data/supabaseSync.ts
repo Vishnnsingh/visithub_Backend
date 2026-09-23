@@ -45,8 +45,11 @@ export async function syncAppStoreToTables(raw: unknown) {
         updated_at: o.updatedAt || new Date().toISOString(),
         raw: o,
       }));
-      const { error } = await sb.from('vh_organizations').upsert(rows, { onConflict: 'id' });
-      if (error) logger.warn(`vh_organizations sync: ${error.message}`);
+      const { error } = await sb.from('organizations').upsert(rows, { onConflict: 'id' });
+      if (error) {
+        const fallback = await sb.from('vh_organizations').upsert(rows, { onConflict: 'id' });
+        if (fallback.error) logger.warn(`organizations sync: ${error.message}`);
+      }
     }
 
     if (users.length) {
@@ -67,8 +70,11 @@ export async function syncAppStoreToTables(raw: unknown) {
         updated_at: u.updatedAt || new Date().toISOString(),
         raw: u,
       }));
-      const { error } = await sb.from('vh_users').upsert(rows, { onConflict: 'id' });
-      if (error) logger.warn(`vh_users sync: ${error.message}`);
+      const { error } = await sb.from('users').upsert(rows, { onConflict: 'id' });
+      if (error) {
+        const fallback = await sb.from('vh_users').upsert(rows, { onConflict: 'id' });
+        if (fallback.error) logger.warn(`users sync: ${error.message}`);
+      }
     }
 
     if (roles.length) {

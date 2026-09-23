@@ -59,7 +59,7 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  for (const table of ['app_kv', 'vh_users', 'vh_organizations']) {
+  for (const table of ['app_kv', 'users', 'organizations']) {
     const { error } = await admin.from(table).select('*', { count: 'exact', head: true });
     if (error) {
       console.error(
@@ -151,7 +151,7 @@ async function syncApp(admin, data) {
   const orgs = data.organizations || [];
   const users = data.users || [];
   if (orgs.length) {
-    const { error } = await admin.from('vh_organizations').upsert(
+    const { error } = await admin.from('organizations').upsert(
       orgs.map((o) => ({
         id: o.id,
         name: o.name || '',
@@ -176,10 +176,10 @@ async function syncApp(admin, data) {
       })),
       { onConflict: 'id' }
     );
-    console.log(error ? `  FAIL orgs: ${error.message}` : `  OK   vh_organizations (${orgs.length})`);
+    console.log(error ? `  FAIL orgs: ${error.message}` : `  OK   organizations (${orgs.length})`);
   }
   if (users.length) {
-    const { error } = await admin.from('vh_users').upsert(
+    const { error } = await admin.from('users').upsert(
       users.map((u) => ({
         id: u.id,
         email: String(u.email || '').toLowerCase(),
@@ -195,7 +195,7 @@ async function syncApp(admin, data) {
       })),
       { onConflict: 'id' }
     );
-    console.log(error ? `  FAIL users: ${error.message}` : `  OK   vh_users (${users.length})`);
+    console.log(error ? `  FAIL users: ${error.message}` : `  OK   users (${users.length})`);
   }
   const visitors = data.visitors || [];
   for (let i = 0; i < visitors.length; i += 200) {
